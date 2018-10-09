@@ -1,6 +1,8 @@
 #!/usr/bin/python3
 """ Testing pylint"""
 import sys
+import os
+import platform
 import subprocess
 import getopt
 import pymysql
@@ -44,6 +46,7 @@ class CreateUser:
 def main(argv):
     username = None
     password = None
+    print(platform.system())
     manager = VBoxManager("C:\Program Files\Oracle\VirtualBox")
     while True:
         command = input("Command: ")
@@ -102,8 +105,8 @@ def main(argv):
                 machines = manager.listVms()
                 machinesJson = jsonpickle.encode(machines)
                 for vm in machines:
-                    print(vm.name)
-                    print(machinesJson)
+                    print(vm.name + "-> " +vm.UUID)
+                    # print(machinesJson)
             if command == "running":
                 machines = manager.runningVms()
                 machinesJson = jsonpickle.encode(machines)

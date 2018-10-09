@@ -4,6 +4,7 @@ import getopt
 import json
 import os
 import time
+import platform
 from Helpers import File
 
 class VirtualMachine:
@@ -24,28 +25,46 @@ class VBoxManager:
         This will allow to have control over the installed virtual machines on the system
     """
     def __init__(self, path = None):
-        self.path = "\"{0}\\vboxmanage.exe\"".format(path)        
         self.version = None
         self.errorMessage = None
-        self.active = self.__check()
-        self.virtualMachines = self.listVms()
-        self.ScreenshotOutput = ""
+        self.path = ""
+        self.active = False
+        # Checking the undelying operating system to check where to find the needed executable
+        if platform.system().lower() == "linux":
+            self.path = "vboxmanage"
+        elif platform.system().lower() == "windows":
+            self.path = "\"{0}\\vboxmanage.exe\"".format(path)
+        else:
+            self.errorMessage = "Unknown operating system, cannot continue."        
+        # Checking if we found a valid operating system
+        if self.path != "":
+            self.active = self.__check()
+            self.virtualMachines = self.listVms()
+            self.ScreenshotOutput = ""
 
     def startVm(self, name, headless = False):
-        """Starts a virtual machine by it's name"""
+        """Starts a virtual machine by it's name (name is case insensitive)
+        """
         if self.active:
             if not self.isVmRunning(name):
-                if headless:
-                    return self.__executeCmd("startvm {0} --type headless".format(name))[0]
-                else:
-                    return self.__executeCmd("startvm {0}".format(name))[0]
+                #trying to find the machine on the list of  machines
+                machineId = self.__getMachineId(name)
+                if machineId != None:
+                    if headless:
+                        return self.__executeCmd("startvm {0} --type headless".format(machineId))[0]
+                    else:
+                        return self.__executeCmd("startvm {0}".format(machineId))[0]
         return False
     
     def stopVm(self, name):
         """Stops a virtual machine by it's name"""
         if self.active:
-            if self.isVmRunning(name):                
-                return self.__executeCmd("controlvm {0} poweroff".format(name))
+            if self.isVmRunning(name):
+                machineId = self.__getMachineId(name)
+                if machineId != None:
+                    return self.__executeCmd("controlvm {0} poweroff".format(name))
+                else:
+                    return False
             else:
                 return False
         return False
@@ -54,16 +73,24 @@ class VBoxManager:
         """Pause a virtual machine by it's name"""
         if self.active:
             if self.isVmRunning(name):
-                return self.__executeCmd("controlvm {0} pause".format(name))
+                machineId = self.__getMachineId(name)
+                if machineId != None:
+                    return self.__executeCmd("controlvm {0} pause".format(name))
+                else:
+                    return False
             else:
                 return False
         return False
-    
+        
     def resumeVm(self, name):
         """Resume a virtual machine by it's name"""
         if self.active:
             if self.isVmRunning(name):
-                return self.__executeCmd("controlvm {0} resume".format(name))
+                machineId = self.__getMachineId(name)
+                if machineId != None:
+                    return self.__executeCmd("controlvm {0} resume".format(name))
+                else:
+                    return false
             else:
                 return False
         return False
@@ -72,7 +99,11 @@ class VBoxManager:
         """Reset a virtual machine by it's name"""
         if self.active:
             if self.isVmRunning(name):
-                return self.__executeCmd("controlvm {0} reset".format(name))
+                machineId: self.__getMachineId(name)
+                if machineId != None:
+                    return self.__executeCmd("controlvm {0} reset".format(name))
+                else:
+                    return False
             else:
                 return False
         return False
@@ -102,7 +133,9 @@ class VBoxManager:
             if len(running) > 0:
                 for vm in running:
                     if isinstance(vm, VirtualMachine):
-                        if vm.name == name:
+                        vmName = vm.name.lower().replace(" ","")
+                        name = name.lower().replace(" ", "")
+                        if vmName == name:
                             return True
             return False
         return False
@@ -124,16 +157,18 @@ class VBoxManager:
                         outputStr = output.decode("utf8")
                     elif isinstance(output, str):
                         outputStr = output
-                    vms = outputStr.split("\r\n")
+                    vms = outputStr.split("\n")
                     for vmStr in vms:
-                        vmArr = vmStr.split(" ")
-                        if len(vmArr) > 1:
-                            vmName = vmArr[0].replace("\"","")
-                            vmId = vmArr[1].replace("{","")
-                            vmId = vmId.replace("}","")
+                        separator = vmStr.find("{")
+                        vmName = vmStr[0:separator].strip()
+                        vmUUID = vmStr[separator:len(vmStr)].strip()
+                        if len(vmName) > 1:
+                            vmName = vmName.replace("\"","")
+                            vmUUID = vmUUID.replace("{","")
+                            vmUUID = vmUUID.replace("}","")
                             if vmName:
-                                vm = VirtualMachine(vmName, vmId)
-                                vm.running = True
+                                vm = VirtualMachine(vmName, vmUUID)
+                                vm.running = self.isVmRunning(vm.name)
                                 virtualMachines.append(vm)                        
             return virtualMachines
         return []
@@ -150,15 +185,17 @@ class VBoxManager:
                         outputStr = output.decode("utf8")
                     elif isinstance(output, str):
                         outputStr = output
-                    vms = outputStr.split("\r\n")
+                    vms = outputStr.split("\n")
                     for vmStr in vms:
-                        vmArr = vmStr.split(" ")
-                        if len(vmArr) > 1:
-                            vmName = vmArr[0].replace("\"","")
-                            vmId = vmArr[1].replace("{","")
-                            vmId = vmId.replace("}","")
+                        separator = vmStr.find("{")
+                        vmName = vmStr[0:separator].strip()
+                        vmUUID = vmStr[separator:len(vmStr)].strip()
+                        if len(vmName) > 1:
+                            vmName = vmName.replace("\"","")
+                            vmUUID = vmUUID.replace("{","")
+                            vmUUID = vmUUID.replace("}","")
                             if vmName:
-                                vm = VirtualMachine(vmName, vmId)
+                                vm = VirtualMachine(vmName, vmUUID)
                                 vm.running = self.isVmRunning(vm.name)
                                 virtualMachines.append(vm)                        
             return virtualMachines
@@ -167,6 +204,14 @@ class VBoxManager:
     def __check(self):
         """Testing if there is a VBoxManager to use"""
         return self.__executeCmd("--version")[0]
+    
+    def __getMachineId(self, name):
+        name = name.replace(" ","").lower()
+        for machine in self.virtualMachines:
+            machineName = machine.name.replace(" ","").lower()
+            if machineName == name:
+                return machine.UUID
+        return None
 
     def __updateVmState(self, name, state):
         for vm in self.virtualMachines:
